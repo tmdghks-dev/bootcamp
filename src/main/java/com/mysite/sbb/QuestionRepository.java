@@ -2,6 +2,10 @@ package com.mysite.sbb;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface QuestionRepository extends JpaRepository<Question, Integer> {
+import java.util.Optional;
 
+public interface QuestionRepository extends JpaRepository<Question, Integer> {
+    Optional<Question> findBySubject(String subject);
+
+    Optional<Question> findBySubjectAndContent(String subject, String content);
 }

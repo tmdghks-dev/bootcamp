@@ -7,9 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
-import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -20,21 +19,34 @@ class QuestionRepositoryTest {
     @Test
     @DisplayName("findAll")
     void t1() {
-        List<Question> all = questionRepository.findAll();
-        assertEquals(2, all.size());
+        List<Question> questions = questionRepository.findAll();
 
-        Question q = all.get(0);
-        assertEquals("sbb가 무엇인가요?", q.getSubject());
+        assertThat(questions).hasSize(2);
+
+        Question question = questions.get(0);
+        assertThat(question.getSubject()).isEqualTo("sbb가 무엇인가요?");
     }
 
     @Test
     @DisplayName("findById")
     void t2() {
-        Optional<Question> oq = questionRepository.findById(1);
+        Question question = questionRepository.findById(1).get();
+        assertThat(question.getSubject()).isEqualTo("sbb가 무엇인가요?");
+    }
 
-        if (oq.isPresent()) {
-            Question q = oq.get();
-            assertEquals("sbb가 무엇인가요?", q.getSubject());
-        }
+    @Test
+    @DisplayName("findBySubject")
+    void t3() {
+        Question question = questionRepository.findBySubject("sbb가 무엇인가요?").get();
+        // SELECT * FROM question WHERE subject = 'sbb가 무엇인가요?'
+        assertThat(question.getId()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("findBySubjectAndContent")
+    void t4() {
+        Question question = questionRepository.findBySubjectAndContent("sbb가 무엇인가요?", "sbb에 대해서 알고 싶습니다.").get();
+        // SELECT * FROM question WHERE subject = 'sbb가 무엇인가요?' AND content = 'sbb에 대해서 알고 싶습니다.'
+        assertThat(question.getId()).isEqualTo(1);
     }
 }
