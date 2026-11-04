@@ -21,7 +21,6 @@ public class Question {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    // mappedBy 속성을 지정하지 않으면 중간테이블을 만든다.
-    @OneToMany(cascade = CascadeType.REMOVE)
+    @OneToMany(mappedBy = "question", cascade = CascadeType.REMOVE)
     private List<Answer> answers;
 }
