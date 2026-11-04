@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,6 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class QuestionRepositoryTest {
     @Autowired
     private QuestionRepository questionRepository;
+
+    @Autowired
+    private AnswerRepository answerRepository;
 
     @Test
     @DisplayName("findAll")
@@ -84,5 +88,18 @@ class QuestionRepositoryTest {
         questionRepository.delete(question);
 
         assertThat(questionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("답변 생성")
+    @Transactional
+    void t8() {
+        Question question = questionRepository.findById(2).get();
+
+        Answer answer = new Answer();
+        answer.setContent("네 자동으로 생성됩니다.");
+        answer.setQuestion(question);
+        answer.setCreateDate(LocalDateTime.now());
+        answerRepository.save(answer);
     }
 }
