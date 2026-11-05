@@ -134,7 +134,7 @@ class QuestionRepositoryTest {
         Question question = questionRepository.findById(2).get();
 
         List<Answer> answers = question.getAnswers();
-        assertThat(answers).hasSize(1);
+        assertThat(answers).hasSize(2);
 
         Answer answer = answers.get(0);
         assertThat(answer.getContent()).isEqualTo("네 자동으로 생성됩니다.");
