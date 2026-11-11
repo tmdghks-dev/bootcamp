@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -61,11 +63,11 @@ public class PostController {
     @AllArgsConstructor
     @Getter
     public static class WriteForm {
-        @NotBlank
-        @Size(min = 2, max = 20)
+        @NotBlank(message = "제목을 입력해주세요.")
+        @Size(min = 2, max = 20, message = "제목은 2자 이상, 20자 이하로 입력가능합니다.")
         private String title;
-        @NotBlank
-        @Size(min = 2, max = 20)
+        @NotBlank(message = "내용을 입력해주세요.")
+        @Size(min = 2, max = 20, message = "내용은 2자 이상, 20자 이하로 입력가능합니다.")
         private String content;
     }
 
@@ -73,8 +75,18 @@ public class PostController {
     @ResponseBody
     @Transactional
     public String write(
-            @Valid WriteForm form
+            @Valid WriteForm form,
+            BindingResult bindingResult
     ) {
+        if (bindingResult.hasErrors()) {
+            FieldError fieldError = bindingResult.getFieldError();
+
+            String errorFieldName = fieldError.getField();
+            String errorMessage = fieldError.getDefaultMessage();
+
+            return getWriteFormHtml(errorFieldName, errorMessage, form.getTitle(), form.getContent());
+        }
+
         Post post = postService.write(form.getTitle(), form.getContent());
 
         return "%d번 글이 생성되었습니다.".formatted(post.getId());
