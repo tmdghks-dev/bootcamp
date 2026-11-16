@@ -37,4 +37,14 @@ public class ApiV1PostController {
 
         return new RsData<>("200-1", "%d번 글 조회에 성공했습니다.".formatted(id), new PostDto(post));
     }
+
+    @GetMapping("/{id}/delete")
+    @Transactional
+    public RsData<PostDto> delete(@PathVariable int id) {
+        Post post = postService.findById(id).get();
+
+        postService.delete(post);
+
+        return new RsData<>("200-1", "%d번 글이 삭제되었습니다.".formatted(id), new PostDto(post));
+    }
 }
