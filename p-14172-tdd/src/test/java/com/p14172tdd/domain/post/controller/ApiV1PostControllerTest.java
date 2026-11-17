@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -67,5 +68,18 @@ class ApiV1PostControllerTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(postService.count()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("글 삭제")
+    void t3() throws Exception {
+        mvc.perform(delete("/api/v1/posts/1"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.msg").value("1번 글이 삭제되었습니다."));
+
+        assertThat(postService.findById(1)).isEmpty();
+        assertThat(postService.count()).isEqualTo(2);
     }
 }
