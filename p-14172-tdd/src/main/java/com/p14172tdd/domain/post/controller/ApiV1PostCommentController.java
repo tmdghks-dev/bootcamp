@@ -40,4 +40,22 @@ public class ApiV1PostCommentController {
                 new PostCommentDto(comment)
         );
     }
+
+    @DeleteMapping("/{id}")
+    @Transactional
+    public RsData<Void> delete(
+            @PathVariable long postId,
+            @PathVariable long id
+    ) {
+        Post post = postService.findById(postId).get();
+        PostComment comment = post.findCommentById(id).get();
+
+        postService.deleteComment(post, comment);
+
+        return new RsData<>(
+                "200-1",
+                "%d번 댓글이 삭제되었습니다.".formatted(id),
+                null
+        );
+    }
 }
