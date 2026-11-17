@@ -1,0 +1,472 @@
+# SBB (점프 투 스프링부트) 복습 프로젝트
+
+『점프 투 스프링부트』의 기능을 구현하면서, 장희성 강사의 수업(14163 점프 투 스프링부트 개선, 14168 JPA·타임리프 개선) 방식을 적용해 개선하는 프로젝트입니다.
+
+- 교재: https://wikidocs.net/book/7601 / https://github.com/pahkey/sbb3
+- 14163: https://www.slog.gg/p/14163/raw / https://github.com/jhs512/p-14163-2
+- 14168: https://www.slog.gg/p/14168/raw / https://github.com/jhs512/p-14168-2
+- 추가 기능: https://wikidocs.net/162814
+- 강사 레포 (같은 미션의 예시, README의 "강사 레포 000-00"은 이 레포의 커밋 번호): https://github.com/jhs512/jsb-plus
+
+## 기술 스택
+
+- Spring Boot 4.1.2, Java 25, Gradle 9.8.2 (Kotlin DSL)
+- Spring Data JPA, H2 (dev: 파일 DB `./db_dev`, test: 메모리 DB), Thymeleaf + Layout Dialect, Spring Security 7, Validation, commonmark
+- Bootstrap 5.3.8 (cdnjs), Pretendard 폰트
+
+## 실행 방법
+
+```bash
+./gradlew bootRun   # http://localhost:8080 (dev 프로필)
+./gradlew test      # test 프로필, 메모리 DB
+```
+
+- 개발용 회원: `admin`, `user1`, `user2` (비밀번호 모두 `1234`, `BaseInitData`가 생성)
+- 개발 실행 시 페이징 확인용 질문 300개가 함께 생성됨 (dev 프로필만)
+- H2 콘솔: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:./db_dev`, 사용자 `sa`)
+
+## 구현한 기능 (책 2장·3장)
+
+| 기능 | URL | 커밋 |
+|---|---|---|
+| 질문 목록·페이징·검색 | `GET /questions?page=&kw=` | 005, 010, 019 |
+| 질문 상세 (마크다운) | `GET /questions/{id}` | 005, 018 |
+| 질문 등록 | `GET·POST /questions/write` | 008 |
+| 질문 수정·삭제 | `GET·PUT /questions/{id}/modify`, `DELETE /questions/{id}/delete` | 015 |
+| 답변 등록·수정·삭제 | `POST /questions/{id}/answers/write`, `GET·PUT …/answers/{id}/modify`, `DELETE …/answers/{id}/delete` | 006, 015 |
+| 추천 | `POST /questions/{id}/vote`, `POST …/answers/{id}/vote` | 016 |
+| 회원가입·로그인·로그아웃 | `/members/join`, `/members/login`, `POST /members/logout` | 012, 013 |
+
+## 책(SBB)과 비교한 개선점
+
+| # | 책(SBB) | 이 프로젝트 | 출처 |
+|---|---|---|---|
+| 1 | properties 하나, 테스트도 개발 DB(`~/local`) 사용 | yaml 프로필 3개, 테스트는 메모리 DB | 14163·14168 |
+| 2 | 테스트가 개발 DB에 데이터만 넣고 assert 없음 | `@Transactional` 롤백 + 실제 assert (테스트 27개), 틀린 방법을 먼저 보여주는 [실험] 커밋 3개 | 14163·강사 레포 |
+| 3 | 엔티티마다 id·날짜 중복, `LocalDateTime.now()` 직접 입력 | `BaseEntity` + JPA Auditing | 14168 |
+| 4 | `@Setter`로 어디서나 값 변경 | 생성자 + 도메인 메서드(`modify`, `addAnswer`, `vote`) | 14168 |
+| 5 | `answerRepository.save`, AnswerService | `addAnswer` + cascade PERSIST, `deleteAnswer` + orphanRemoval (Answer 전용 Repository·Service 없음) | 14163·14168 |
+| 6 | `@ManyToOne` 기본값 EAGER | 모두 LAZY | 14163 |
+| 7 | 서비스에 트랜잭션 없음, 매번 `save()` | 컨트롤러 액션에 `@Transactional`(조회 readOnly) + dirty checking, `auto-commit: false` | 14168 |
+| 8 | 삭제·추천·로그아웃이 GET (`location.href`) | `_method`로 PUT/DELETE, `a[method]` → CSRF 토큰이 담긴 폼 전송, POST 로그아웃 | 14168 |
+| 9 | `/question/detail/1`, `/answer/create/1` | `/questions/1`, `/questions/1/answers/write` | 14163·14168 |
+| 10 | 폼 클래스, 오류 순서 무작위 | 컨트롤러 안 record 폼 + 오류 정렬 + 첫 오류 필드 focus | 14168 |
+| 11 | bootstrap 파일을 static에 직접 넣음 | cdnjs + Pretendard | 14163 |
+| 12 | 루트 패키지에 클래스가 섞여 있음 | `domain/global` 패키지 구조 | 14168 |
+| 13 | 템플릿을 고치면 재시작 필요 | dev는 템플릿을 소스 폴더에서 읽고 캐시 끔 | 14168 |
+| 14 | 작성자 비교를 문자열(username)로 컨트롤러마다 반복 | 엔티티 `isAuthor()`에서 id로 비교 (LAZY 프록시도 안전) | 직접 (검증 중 발견) |
+| 15 | 목록에서 질문마다 답변을 따로 조회 (N+1, 12개 SELECT) | `default_batch_fetch_size`로 IN 한 번 (3개 SELECT) | 강사 레포 020-02 |
+| 16 | 마크다운 안의 `<script>`가 그대로 실행 (저장형 XSS) | raw HTML 이스케이프 + 위험한 링크 무력화 | 강사 레포 028-02 |
+
+## Boot 4에서 책 코드가 그대로 안 되던 곳
+
+- **로그아웃**: Spring Security 7은 CSRF가 켜져 있으면 로그아웃을 POST로만 받음 → 책의 GET 로그아웃(`AntPathRequestMatcher`) 대신 POST (013-03)
+- **`@PreAuthorize`**: `@EnableMethodSecurity`가 없으면 오류 없이 무시됨 (014-01)
+- **마크다운**: Thymeleaf 3.1.5는 `th:utext` 안의 `${@commonUtil...}` 빈 호출을 막음 → 컨트롤러가 모델로 넘김 (018-01)
+- **중복 가입 처리**: 트랜잭션이 컨트롤러에 있어서 DB 예외를 catch하면 트랜잭션이 롤백 전용이 됨 → 저장 전에 조회로 확인 (012-03)
+- **답변 앵커**: save 없이 cascade로 저장하면 커밋 전까지 id가 0 → `flush`로 INSERT를 먼저 실행 (017-01)
+
+## 기능별 바로가기
+
+기능 번호마다 태그(`001`, `002` …)가 있어서, 그 기능이 끝난 시점의 코드와 그 기능에서 바뀐 내용을 바로 볼 수 있습니다. 세부 작업은 아래 `## 작업내역`의 커밋별 링크(`001-01` …)를 보세요.
+
+| 번호 | 기능 | 그 시점 코드 | 바뀐 내용 |
+|---|---|---|---|
+| 001 | 프로젝트 시작 | [001](https://github.com/tmdghks-dev/sbb/tree/001) | [001-01~02](https://github.com/tmdghks-dev/sbb/commits/001) |
+| 002 | 개발 환경 (H2·JPA·프로필·SQL 로그) | [002](https://github.com/tmdghks-dev/sbb/tree/002) | [001…002](https://github.com/tmdghks-dev/sbb/compare/001...002) |
+| 003 | 엔티티 (BaseEntity·Question·Answer) | [003](https://github.com/tmdghks-dev/sbb/tree/003) | [002…003](https://github.com/tmdghks-dev/sbb/compare/002...003) |
+| 004 | 리포지터리·테스트·초기 데이터 | [004](https://github.com/tmdghks-dev/sbb/tree/004) | [003…004](https://github.com/tmdghks-dev/sbb/compare/003...004) |
+| 005 | 질문 목록·상세 | [005](https://github.com/tmdghks-dev/sbb/tree/005) | [004…005](https://github.com/tmdghks-dev/sbb/compare/004...005) |
+| 006 | 답변 등록 | [006](https://github.com/tmdghks-dev/sbb/tree/006) | [005…006](https://github.com/tmdghks-dev/sbb/compare/005...006) |
+| 007 | 화면 (Bootstrap·레이아웃) | [007](https://github.com/tmdghks-dev/sbb/tree/007) | [006…007](https://github.com/tmdghks-dev/sbb/compare/006...007) |
+| 008 | 질문 등록·폼 검증 | [008](https://github.com/tmdghks-dev/sbb/tree/008) | [007…008](https://github.com/tmdghks-dev/sbb/compare/007...008) |
+| 009 | 내비게이션 바 | [009](https://github.com/tmdghks-dev/sbb/tree/009) | [008…009](https://github.com/tmdghks-dev/sbb/compare/008...009) |
+| 010 | 페이징 | [010](https://github.com/tmdghks-dev/sbb/tree/010) | [009…010](https://github.com/tmdghks-dev/sbb/compare/009...010) |
+| 011 | 시큐리티 도입 | [011](https://github.com/tmdghks-dev/sbb/tree/011) | [010…011](https://github.com/tmdghks-dev/sbb/compare/010...011) |
+| 012 | 회원가입 | [012](https://github.com/tmdghks-dev/sbb/tree/012) | [011…012](https://github.com/tmdghks-dev/sbb/compare/011...012) |
+| 013 | 로그인·로그아웃 | [013](https://github.com/tmdghks-dev/sbb/tree/013) | [012…013](https://github.com/tmdghks-dev/sbb/compare/012...013) |
+| 014 | 글쓴이 | [014](https://github.com/tmdghks-dev/sbb/tree/014) | [013…014](https://github.com/tmdghks-dev/sbb/compare/013...014) |
+| 015 | 수정·삭제 | [015](https://github.com/tmdghks-dev/sbb/tree/015) | [014…015](https://github.com/tmdghks-dev/sbb/compare/014...015) |
+| 016 | 추천 | [016](https://github.com/tmdghks-dev/sbb/tree/016) | [015…016](https://github.com/tmdghks-dev/sbb/compare/015...016) |
+| 017 | 앵커 | [017](https://github.com/tmdghks-dev/sbb/tree/017) | [016…017](https://github.com/tmdghks-dev/sbb/compare/016...017) |
+| 018 | 마크다운 | [018](https://github.com/tmdghks-dev/sbb/tree/018) | [017…018](https://github.com/tmdghks-dev/sbb/compare/017...018) |
+| 019 | 검색, 1단계 마무리 | [019](https://github.com/tmdghks-dev/sbb/tree/019) | [018…019](https://github.com/tmdghks-dev/sbb/compare/018...019) |
+| 020 | 1단계 보강 ([실험] mappedBy·LAZY·XSS, N+1, XSS 방지) | [020](https://github.com/tmdghks-dev/sbb/tree/020) | [019…020](https://github.com/tmdghks-dev/sbb/compare/019...020) |
+
+## 아직 하지 않은 것 (선택)
+
+MockMvc 컨트롤러 테스트, 전역 예외 처리(`@ControllerAdvice`), flash 메시지, 권한 오류 403 통일, 페이지 번호 1부터 표시, 책 4장 배포, 3-14 도전과제
+
+## 작업내역
+
+### 001-01 프로젝트 시작, 프로젝트 생성
+- [링크](https://github.com/tmdghks-dev/sbb/commit/001-01)
+- 작업: Spring Boot 4.1.2 · Java 25 · Gradle Kotlin DSL 프로젝트 생성 (패키지 `com.back`, 메인 클래스 `BackApplication`), 의존성은 webmvc · lombok · devtools · 테스트만 추가, README 작성
+- 이유: 강사 14168과 같은 출발점(패키지·빌드 설정)을 만들고, H2·JPA 같은 의존성은 필요한 작업에서 하나씩 추가하기 위해 (14163 진행 방식)
+- 결과: `./gradlew test` 통과(contextLoads), 실행 시 8080 포트로 기동, 컨트롤러가 없어서 `GET /`는 404
+
+### 001-02 프로젝트 시작, MainController로 `/`·`/hello` 응답
+- [링크](https://github.com/tmdghks-dev/sbb/commit/001-02)
+- 작업: `MainController`(`@Controller`)에 `GET /` → `"SBB"`, `GET /hello` → `"안녕하세요 ^ ^"` 액션 추가, 각 액션에 `@ResponseBody`
+- 이유: 컨트롤러가 없으면 404가 난다는 것을 001-01에서 확인했고, 액션 메서드가 실행되고 반환값이 응답 본문이 되는 흐름을 확인하기 위해 (14163 3~4강). `@ResponseBody`가 없으면 반환 문자열을 템플릿 이름으로 해석하고, void를 반환하면 500 오류가 남
+- 결과: `./gradlew test` 통과, 브라우저에서 `/` → `SBB`, `/hello` → `안녕하세요 ^ ^` 확인
+
+### 002-01 개발 환경, H2·H2 콘솔·JPA 의존성 추가
+- [링크](https://github.com/tmdghks-dev/sbb/commit/002-01)
+- 작업: `spring-boot-starter-data-jpa`, `spring-boot-h2console`, `com.h2database:h2`, 테스트용 `spring-boot-starter-data-jpa-test` 추가
+- 이유: 질문·답변을 DB에 저장하기 위한 준비 (책 2-03). Boot 4는 H2 콘솔이 별도 모듈(`spring-boot-h2console`)이라 따로 추가해야 함 (14163·14168)
+- 결과: 테스트 통과, 개발 실행 시 `/h2-console` 200. 아직 DB 설정이 없어서 매번 이름이 랜덤인 메모리 DB(`jdbc:h2:mem:fb2e…`)가 만들어짐 → 002-02에서 해결. H2 콘솔은 devtools가 있을 때만 자동으로 켜져서 jar 실행에서는 404
+
+### 002-02 개발 환경, 프로필별 DB 분리 (dev 파일 DB / test 메모리 DB)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/002-02)
+- 작업: `application.yaml`(공통, 기본 프로필 `dev`, `ddl-auto: update`) / `application-dev.yaml`(`jdbc:h2:./db_dev;MODE=MySQL`) / `application-test.yaml`(`jdbc:h2:mem:db_test;MODE=MySQL`)로 분리, 테스트에 `@ActiveProfiles("test")`, `.gitignore`에 `db_dev.*` 추가
+- 이유: 책은 개발과 테스트가 같은 DB(`~/local`)를 써서 테스트가 개발 데이터를 오염시킴. 테스트는 매번 새로 만들어지는 메모리 DB를 쓰도록 분리 (14163 5강, 14168). `MODE=MySQL`은 나중에 MySQL로 바꿔도 SQL 문법 차이를 줄이기 위함 (14168)
+- 결과: 테스트는 `test` 프로필 + `jdbc:h2:mem:db_test`, 개발 실행은 `dev` 프로필 + 프로젝트 폴더의 `db_dev.mv.db` 파일 생성, H2 콘솔로 `jdbc:h2:./db_dev` 접속 확인, DB 파일은 git에 안 올라감
+
+### 002-03 개발 환경, SQL·트랜잭션 로그 설정
+- [링크](https://github.com/tmdghks-dev/sbb/commit/002-03)
+- 작업: `show-sql`, `format_sql`, `highlight_sql`, `use_sql_comments` 켜기, `org.hibernate.orm.jdbc.bind`·`extract` TRACE(바인딩 값·조회 결과), `org.springframework.transaction.interceptor` TRACE(트랜잭션 시작·종료), 컬러 로그(`output.ansi.enabled: always`)
+- 이유: JPA가 실제로 어떤 SQL을 언제 실행하는지, `?`에 어떤 값이 들어가는지, 트랜잭션이 어디서 열리고 닫히는지 눈으로 확인하면서 공부하기 위해 (14163 6강, 14168)
+- 결과: 테스트 통과. 아직 엔티티가 없어서 실행되는 SQL이 없음 → 003(엔티티)부터 로그로 확인
+
+### 002-04 개발 환경, 커넥션 auto-commit 끄기
+- [링크](https://github.com/tmdghks-dev/sbb/commit/002-04)
+- 작업: `spring.datasource.hikari.auto-commit: false`
+- 이유: 커넥션 풀이 기본으로 auto-commit을 켜 두면 SQL 하나마다 바로 커밋됨. 커밋 시점을 `@Transactional`(이 프로젝트는 컨트롤러 액션에 붙임)이 정하도록 맡기고, 트랜잭션 밖에서 실수로 반영되는 것을 막기 위해 (14168)
+- 결과: 테스트 통과, 앱 정상 기동(`/` 200). 실제 효과는 004(리포지터리·트랜잭션 테스트)에서 로그로 확인
+
+### 003-01 엔티티, BaseEntity와 JPA Auditing
+- [링크](https://github.com/tmdghks-dev/sbb/commit/003-01)
+- 작업: global/jpa/entity/BaseEntity 추가: @MappedSuperclass, int id(IDENTITY), @CreatedDate createDate, @LastModifiedDate modifyDate, id 기반 equals/hashCode, BackApplication에 @EnableJpaAuditing
+- 이유: 책은 Question·Answer마다 id·createDate를 중복 선언하고 LocalDateTime.now()를 직접 넣음, 공통 필드를 부모 클래스로 모으고 날짜는 Auditing이 자동으로 채우게 하기 위해 (14168), equals/hashCode는 컬렉션에서 remove가 정확히 동작하게 하기 위함 (14168 38강). 주의: id만 비교하므로 저장 전(id=0) 엔티티끼리는 같다고 판단됨
+- 결과: ./gradlew test 통과 (1개), 아직 상속하는 엔티티가 없어 테이블은 생기지 않음
+
+### 003-02 엔티티, Question 생성
+- [링크](https://github.com/tmdghks-dev/sbb/commit/003-02)
+- 작업: domain/question/question/entity/Question: BaseEntity 상속, subject(length 200), content(TEXT), @Getter·@NoArgsConstructor만 쓰고 @Setter 없음, 생성자 Question(subject, content)로 생성, 패키지는 처음부터 14168 구조(domain/애그리거트/엔티티/계층) 사용
+- 이유: 책은 @Setter를 열어 두고 서비스에서 new 후 setter로 값을 채움 → 어디서나 값이 바뀔 수 있음, 생성은 생성자로, 변경은 나중에 도메인 메서드(modify)로만 하게 하기 위해 (14168 Post)
+- 결과: ./gradlew test 통과 (1개), SQL 로그에 create table question (id, create_date, modify_date, subject varchar(200), content text) 확인
+
+### 003-03 엔티티, Answer 생성 (ManyToOne LAZY)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/003-03)
+- 작업: domain/question/answer/entity/Answer: BaseEntity 상속, content(TEXT), @ManyToOne(fetch = LAZY) question → answer 테이블에 question_id 외래키, setter 없이 생성자 Answer(question, content)
+- 이유: 책은 @ManyToOne 기본값(EAGER)이라 답변을 조회할 때마다 질문까지 즉시 함께 조회함, 필요할 때만 조회하도록 LAZY를 명시 (14163 22~25강, 14168: 웬만하면 LAZY만 사용)
+- 결과: ./gradlew test 통과 (1개), SQL 로그에 create table answer (question_id 포함)와 question_id 외래키 제약 생성 확인
+
+### 003-04 엔티티, 질문→답변 목록과 addAnswer (cascade PERSIST·REMOVE)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/003-04)
+- 작업: Question에 @OneToMany(mappedBy = "question", cascade = {PERSIST, REMOVE}) answers 추가, new ArrayList<>()로 초기화, 연관관계 편의 메서드 addAnswer(content): Answer를 만들어 answers에 추가하고 반환
+- 이유: mappedBy가 없으면 JPA가 중간 테이블(question_answers)을 만듦 → 외래키는 answer.question_id 하나로 관리 (14163 007~013), PERSIST: 질문에 답변을 추가만 해도 저장(INSERT)되게, REMOVE: 질문을 지우면 답변도 지워지게, 책은 answerRepository.save로 저장 → 답변은 질문을 통해서만 다루기 위해 addAnswer 사용 (14163 37강 강사의 커스터마이징, 14168 addComment), 컬렉션 초기화는 NPE 방지 (14163)
+- 결과: ./gradlew test 통과 (1개), SQL 로그에 중간 테이블(question_answers)이 생기지 않음 확인, addAnswer 동작은 004-05 테스트에서 확인
+
+### 003-05 엔티티, orphanRemoval 추가
+- [링크](https://github.com/tmdghks-dev/sbb/commit/003-05)
+- 작업: Question.answers에 orphanRemoval = true 추가
+- 이유: answers 리스트에서 답변을 빼기만 하면(remove) 그 답변이 DB에서도 DELETE 되게 하기 위해 (14168 Post.comments), cascade REMOVE는 부모(질문)를 지울 때 자식도 지우는 것이고, orphanRemoval은 부모와의 관계가 끊긴 자식을 지우는 것 (14168 강의 표), 답변 삭제(015-05)를 AnswerRepository 없이 question.deleteAnswer()로 처리하기 위한 준비
+- 결과: ./gradlew test 통과 (1개), 실제 삭제 동작은 015-05에서 확인
+
+### 004-01 리포지터리, QuestionRepository와 쿼리 메서드
+- [링크](https://github.com/tmdghks-dev/sbb/commit/004-01)
+- 작업: QuestionRepository extends JpaRepository<Question, Integer>, 쿼리 메서드 findBySubject, findBySubjectAndContent(Optional 반환), findBySubjectLike(List 반환)
+- 이유: 메서드 이름만으로 SELECT 쿼리를 만드는 쿼리 메서드 명명 규칙 학습 (책 2-05, 14163 015~017), 하나만 나오는 조회는 Optional로 받아 없는 경우를 명확히 처리하기 위해 (14163)
+- 결과: ./gradlew test 통과 (1개), 각 메서드 동작은 004-03 테스트에서 확인
+
+### 004-02 초기 데이터, BaseInitData로 샘플 질문·답변 생성
+- [링크](https://github.com/tmdghks-dev/sbb/commit/004-02)
+- 작업: global/initData/BaseInitData(@Configuration): ApplicationRunner 빈이 앱 시작 시 self.work1() 호출, work1(@Transactional): 질문이 하나라도 있으면 건너뛰고, 질문 2개 저장 후 2번 질문에 addAnswer로 답변 2개 추가, @Autowired @Lazy self로 자기 자신의 프록시를 주입받음
+- 이유: 개발 DB와 테스트 DB에 같은 샘플 데이터를 준비해서 화면 확인과 테스트 기준값으로 쓰기 위해 (14168 BaseInitData, 14163 TestInitData), 같은 클래스 안에서 this.work1()을 부르면 프록시를 거치지 않아 @Transactional이 적용되지 않음 → self 프록시로 호출, count() > 0 이면 건너뛰어 재시작해도 중복 생성되지 않게, 아직 Service가 없어서 Repository로 시작하고 005-02에서 Service 호출로 바꿈
+- 결과: ./gradlew test 통과 (1개), 로그에 work1 트랜잭션 시작 → insert question 2번 → insert answer 2번 → 트랜잭션 종료 확인 (answer는 save 없이 cascade PERSIST로 INSERT)
+
+### 004-03 리포지터리 테스트, 조회 테스트 (test 프로필 + 트랜잭션 롤백)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/004-03)
+- 작업: QuestionRepositoryTest에 @ActiveProfiles("test") @SpringBootTest @Transactional, t1 findAll(2건), t2 findById, t3 findBySubject, t4 findBySubjectAndContent, t5 findBySubjectLike
+- 이유: 책의 SbbApplicationTests는 개발 DB에 데이터를 넣기만 하고 assert가 없음, test 프로필(메모리 DB)에서 BaseInitData가 만든 데이터를 기준으로 결과를 단언 (14163 014~017), @Transactional: 테스트마다 끝나면 롤백되어 테스트끼리 서로 영향을 주지 않게 (14163 018)
+- 결과: ./gradlew test 통과 (6개)
+
+### 004-04 리포지터리 테스트, modify 도메인 메서드와 수정 테스트 (dirty checking)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/004-04)
+- 작업: Question.modify(subject, content) 도메인 메서드 추가, t6: modify만 호출하고 save 없이 findBySubject("수정된 제목")로 수정 확인, t7: t6의 수정이 롤백되어 원래 제목이 그대로인지 확인
+- 이유: 책은 setSubject 후 save로 수정 → setter 없이 엔티티 스스로 값을 바꾸는 메서드로 변경 (14168 Post.modify), 트랜잭션 안에서 바뀐 엔티티는 save 없이도 UPDATE 됨(dirty checking)을 확인 (14168), 14163 018-1에서 보여준 '수정 테스트가 다른 테스트를 깨뜨리는 문제'가 @Transactional 롤백으로 해결됨을 확인 (14163 018-2)
+- 결과: ./gradlew test 통과 (8개), 로그에 save 호출 없이 update question 실행, 테스트 종료 시 롤백 확인
+
+### 004-05 리포지터리 테스트, 삭제·addAnswer·LAZY 로딩 테스트
+- [링크](https://github.com/tmdghks-dev/sbb/commit/004-05)
+- 작업: t8 삭제: delete 후 count 2 → 1 (답변이 달린 2번이 아니라 1번 질문), t9 addAnswer: flush 전에는 id 0, flush 후 cascade PERSIST로 INSERT되어 id 생성, t10 LAZY 로딩: question.getAnswers() 호출 시점에 답변 2개 조회, 14163의 answerRepository 테스트(t8, t10)는 AnswerRepository를 두지 않기로 해서 제외
+- 이유: 답변을 save 없이 질문에 추가만 해도 저장되는 cascade PERSIST를 테스트로 확인 (14163 019~021), LAZY 컬렉션은 실제로 사용할 때 SELECT되며, 트랜잭션(커넥션)이 살아 있어야 로딩된다는 것을 확인 (14163 022~025), flush를 직접 호출해 INSERT 시점을 눈으로 확인 (14163 강의: INSERT 로그를 보려면 flush)
+- 결과: ./gradlew test 통과 (11개)
+
+### 005-01 질문 목록, QuestionService와 GET /questions
+- [링크](https://github.com/tmdghks-dev/sbb/commit/005-01)
+- 작업: 타임리프 의존성 추가, dev 프로필에 thymeleaf cache false + prefix file:src/main/resources/templates/, QuestionService(count, write, findById, findAll), QuestionController GET /questions → question/question/list 템플릿, 액션에 @Transactional(readOnly = true), BaseInitData를 Repository 대신 QuestionService 호출로 변경
+- 이유: 컨트롤러는 Service를 통해 데이터를 다루게 하기 위해 (책 2-09, 14168 PostService), URL은 복수형 명사 /questions (14163 37강 표, 14168 /posts), 트랜잭션은 DB에 접근하는 컨트롤러 액션에 두고 조회는 readOnly (14168), 템플릿 경로는 도메인 구조와 같게 question/question/list (14168 post/post/list), dev에서 템플릿을 소스 폴더에서 바로 읽어 재시작 없이 반영 (14168)
+- 결과: ./gradlew test 통과 (11개), 브라우저(ego-lite)에서 /questions에 샘플 질문 2개(번호·제목·작성일시) 표시 확인
+
+### 005-02 질문 목록, 루트와 /questions/ 리다이렉트
+- [링크](https://github.com/tmdghks-dev/sbb/commit/005-02)
+- 작업: MainController GET / → redirect:/questions (@ResponseBody 제거), QuestionController GET /questions/ → redirect:/questions
+- 이유: 루트 주소로 들어오면 질문 목록을 보여주기 위해 (책 2-08, 14163 MainController), 끝에 /가 붙은 주소도 목록으로 보내 주소 통일 (14168 /posts/ → /posts), 리다이렉트 액션은 DB에 접근하지 않으므로 @Transactional을 붙이지 않음 (14168)
+- 결과: ./gradlew test 통과 (11개), GET / → 302 Location /questions, GET /questions/ → 302 Location /questions 확인
+
+### 005-03 질문 상세, GET /questions/{id}와 없는 질문 404
+- [링크](https://github.com/tmdghks-dev/sbb/commit/005-03)
+- 작업: QuestionController GET /questions/{id} (@PathVariable int id, readOnly 트랜잭션) → question/question/detail, global/exception/DataNotFoundException(@ResponseStatus 404, reason entity not found), 질문이 없으면 orElseThrow로 던짐, 상세 화면: 제목, 내용(pre-line), 답변 개수와 답변 목록, 목록의 제목을 상세 링크로 변경
+- 이유: URL은 /questions/{id} (14163 37강 표, 14168 /posts/{id}), findById().get()은 없는 id에서 NoSuchElementException(500)이 나므로 의미 있는 404로 응답하기 위해 (책 2-10, 14163 35강), @PathVariable은 int로 통일 (14168), 답변 목록은 LAZY 컬렉션이라 화면을 그릴 때 조회됨 (OSIV)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 /questions/2 → 제목·내용·답변 2개 표시, /questions/999 → 404 entity not found 확인
+
+### 006-01 답변 등록, POST /questions/{id}/answers/write (addAnswer, save 없음)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/006-01)
+- 작업: domain/question/answer/controller/AnswerController: POST /questions/{questionId}/answers/write, @Transactional, QuestionService.writeAnswer(question, content) → question.addAnswer(content), 상세 화면에 답변 입력 폼(textarea + 답변등록) 추가
+- 이유: 책은 POST /answer/create/{id} + AnswerService + answerRepository.save → 답변은 질문의 하위 리소스이므로 /questions/{id}/answers/write (14168 /posts/{postId}/comments/write), 답변은 질문을 통해서만 다루기로 해서 save 없이 addAnswer만 호출하고, 트랜잭션이 끝날 때 cascade PERSIST로 INSERT (14163 37강, 14168 writeComment), 처리 후 상세 페이지로 리다이렉트(PRG)해서 새로고침 시 중복 등록 방지 (14168 28강)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 1번 질문에 답변을 입력하고 등록 → /questions/1로 리다이렉트, 1개의 답변 표시, 로그에 save 호출 없이 insert answer 실행 확인
+
+### 007-01 화면, Bootstrap(cdnjs)·Pretendard 적용
+- [링크](https://github.com/tmdghks-dev/sbb/commit/007-01)
+- 작업: 목록·상세 템플릿에 cdnjs Bootstrap 5.3.8 CSS와 static/style.css 연결, style.css: Pretendard 폰트 @font-face(jsdelivr), body 기본 폰트 지정, 목록은 table, 상세는 card로 질문·답변·작성일시 표시, 답변 폼은 form-control·btn
+- 이유: 책은 bootstrap.min.css를 static 폴더에 직접 넣음 → 파일 관리 없이 cdnjs URL을 복사해 바로 사용 (14163 38~39강), 한글 가독성을 위해 Pretendard 폰트 적용 (14163)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 목록 표와 상세 카드가 Bootstrap 스타일로 표시되는 것 확인
+
+### 007-02 화면, layout.html 공통 레이아웃 (layout-dialect)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/007-02)
+- 작업: thymeleaf-layout-dialect 의존성 추가 (버전은 Boot BOM이 관리), templates/layout.html: doctype·head·Bootstrap·style.css를 한 곳에 두고 layout:fragment="content" 자리에 페이지 내용을 끼움, 목록·상세는 layout:decorate="~{layout}"로 레이아웃 사용, 페이지마다 반복하던 link 태그 제거
+- 이유: 페이지마다 head와 CSS 링크를 반복하지 않고, 표준 HTML 구조(doctype, head, body)를 한 곳에서 관리하기 위해 (책 2-15, 14168 44강)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 상세 화면이 레이아웃을 거쳐 Bootstrap·Pretendard가 그대로 적용되고 문서 제목이 SBB로 표시됨 확인
+
+### 007-03 화면, 페이지별 title (layout:title-pattern)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/007-03)
+- 작업: layout.html의 title에 layout:title-pattern="$CONTENT_TITLE ,  $LAYOUT_TITLE", 목록 페이지 title "질문 목록", 상세 페이지 title "{id}번 질문 - {제목}"
+- 이유: 레이아웃을 쓰면 모든 페이지 제목이 같아지는 문제를 해결하고, 브라우저 탭에서 페이지를 구분하기 위해 (14168 45강)
+- 결과: ./gradlew test 통과 (11개), 브라우저 탭 제목: 목록 "질문 목록 ,  SBB", 상세 "2번 질문 - 스프링부트 모델 질문입니다. ,  SBB" 확인
+
+### 008-01 질문 등록, GET·POST /questions/write (같은 URL, 메서드로 구분)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/008-01)
+- 작업: QuestionController에 중첩 record WriteForm(subject, content), GET /questions/write: @ModelAttribute("form")로 빈 폼을 모델에 넣고 write 템플릿 표시, POST /questions/write: 저장 후 redirect:/questions/{id}, write.html: th:action(현재 URL로 전송), th:object="${form}", th:field="*{subject}", 목록에 질문 등록하기 버튼
+- 이유: 책은 GET /question/create + POST /question/create → 폼 보기와 처리를 같은 URL에 두고 HTTP 메서드로만 구분 (14168 26~28강), GET에서도 form을 모델에 넣어 두면 템플릿에서 ${form?.subject} 대신 *{subject}로 일관되게 쓸 수 있음 (14168), 폼 DTO는 컨트롤러 안 record로 (14168 40강), 폼 보기 액션은 DB에 접근하지 않아 @Transactional 없음 (14168 showWrite)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 목록 → 질문 등록하기 → 제목·내용 입력 → 저장 → 새 질문 상세로 이동 확인
+
+### 008-02 질문 등록, 서버 입력값 검증 (@Valid + BindingResult)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/008-02)
+- 작업: spring-boot-starter-validation(+ validation-test) 의존성 추가, WriteForm에 @NotBlank(제목·내용), @Size(max = 200)(제목), POST 액션에 @ModelAttribute("form") @Valid WriteForm form, BindingResult bindingResult (순서 중요), 오류가 있으면 같은 폼 화면을 다시 보여줌, write.html에 #fields.allErrors()로 오류 메시지 표시
+- 이유: 빈 제목·내용이 저장되는 것을 서버에서 막기 위해 (책 2-16, 14168 9~15강: 서버 검증은 무조건), BindingResult가 @Valid 바로 뒤에 있어야 예외 대신 오류 정보를 받아 폼을 다시 보여줄 수 있음 (14168), @ModelAttribute("form") 덕분에 다시 보여준 폼에 입력했던 값이 그대로 남음 (14168 입력값 유지), 책의 @NotEmpty는 공백만 입력해도 통과 → @NotBlank (14168)
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 제목만 입력하고 저장 → 같은 화면에 "내용을 입력해주세요." 표시, 입력한 제목은 유지됨 확인
+
+### 008-03 질문 등록, 오류 메시지 fragment·정렬·첫 오류 필드 focus
+- [링크](https://github.com/tmdghks-dev/sbb/commit/008-03)
+- 작업: templates/form_errors.html fragment: 오류를 정렬해서 출력하고, 첫 오류 필드에 focus 주는 스크립트 포함, 검증 메시지를 "01-subject-제목을 입력해주세요."처럼 순번-필드명-메시지 형식으로 변경, write.html에서 th:replace="~{form_errors :: formErrorsFragment}"로 사용
+- 이유: #fields.allErrors()는 순서가 매번 달라질 수 있어서 메시지 앞 순번으로 정렬해 항상 같은 순서로 보여주기 위해 (14168 20~25강), 필드명을 data 속성에 담아 첫 오류 필드로 커서를 옮겨 바로 고칠 수 있게 (14168), 오류 표시 코드를 fragment로 분리해 다른 폼에서도 재사용 (책 2-16 form_errors, 14168)
+- 결과: ./gradlew test 통과 (11개), 빈 폼 저장을 3번 반복해도 항상 "제목 → 내용" 순서로 표시되고 제목에 focus 확인, 단 제목만 입력했을 때 내용 칸으로 focus가 가지 않는 문제 발견 → 008-04에서 수정
+
+### 008-04 질문 등록, 첫 오류 필드 focus가 autofocus에 밀리던 문제 수정
+- [링크](https://github.com/tmdghks-dev/sbb/commit/008-04)
+- 작업: form_errors.html의 focus 스크립트를 DOMContentLoaded 이후에 실행, focus 전에 폼 안의 autofocus 속성 제거
+- 이유: fragment 스크립트는 폼 맨 위에서 실행되어 아래쪽 입력칸이 아직 없고, 제목칸의 autofocus가 나중에 적용되어 focus를 빼앗음 (14168 코드 그대로일 때 생기는 문제), 문서를 다 읽은 뒤 autofocus를 지우고 첫 오류 필드에 focus를 줘야 의도대로 동작
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 제목만 입력하고 저장 → 내용 칸에 focus, 빈 폼 저장 → 제목 칸에 focus 확인
+
+### 008-05 답변 등록, 클라이언트 JS 검사 + 서버 @Valid
+- [링크](https://github.com/tmdghks-dev/sbb/commit/008-05)
+- 작업: AnswerController에 중첩 record WriteForm(@NotBlank content), 액션 파라미터를 @Valid WriteForm으로 변경 (BindingResult 없음), 상세 화면 답변 폼에 onsubmit JS 검사: 앞뒤 공백 제거 후 비어 있으면 alert와 focus, 통과하면 전송
+- 이유: 14168 댓글과 같은 방식: 클라이언트 검사를 먼저 해서 대부분의 실수를 화면에서 막고, 서버 검사는 무조건 함 (14168 33~39강), BindingResult가 없으므로 JS를 우회해 빈 값을 보내면 서버가 400으로 거절 (설계 16), 책은 답변 오류 시 상세 화면을 다시 그림 → 14168 방식을 따름
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 공백만 입력하고 답변등록 → "답변 내용을 입력해주세요." alert, 페이지 이동 없음, JS를 거치지 않고 빈 내용을 POST하면 400 응답 확인
+
+### 009-01 내비게이션 바, navbar fragment
+- [링크](https://github.com/tmdghks-dev/sbb/commit/009-01)
+- 작업: templates/navbar.html: SBB 로고(홈 링크)와 질문 목록 링크, 좁은 화면용 햄버거 버튼, layout.html에서 th:replace="~{navbar :: navbarFragment}"로 모든 페이지 상단에 포함, 햄버거 메뉴 동작을 위해 cdnjs Bootstrap JS(bundle) 추가
+- 이유: 어느 페이지에서든 홈과 질문 목록으로 이동하기 위해 (책 3-01), 레이아웃에 한 번만 넣어 모든 페이지에 적용, 책은 bootstrap.min.js를 static에 직접 넣음 → CSS와 같이 cdnjs 사용 (14163 방식), 책 순서대로 질문 등록(2-16) 다음에 진행
+- 결과: ./gradlew test 통과 (11개), 브라우저에서 모든 페이지 상단에 navbar 표시, 폭 400px에서 햄버거 버튼을 누르면 메뉴가 펼쳐짐 확인
+
+### 010-01 페이징, 개발 환경용 테스트 데이터 300개
+- [링크](https://github.com/tmdghks-dev/sbb/commit/010-01)
+- 작업: BaseInitData에 work2 추가: 질문 300개("테스터 데이터입니다:[001]" ~ [300]) 생성, 이미 300개 이상이면 건너뜀, work2를 실행하는 ApplicationRunner 빈은 @Profile("dev")로 개발 환경에서만, @Order로 work1 다음에 실행
+- 이유: 페이징을 확인하려면 데이터가 많아야 함 (책 3-02), 책은 테스트 코드로 개발 DB에 300개를 넣음 → 이 프로젝트의 테스트는 메모리 DB를 쓰고 질문 2개를 기준으로 단언하므로, 개발 환경 초기 데이터로 생성, 강사의 BaseInitData 구조(self 프록시 + @Transactional) 그대로 사용
+- 결과: ./gradlew test 통과 (11개, test 프로필에서는 work2가 실행되지 않음), 개발 실행 시 질문 목록에 302개가 한 페이지에 모두 표시됨 확인 → 010-02에서 페이징
+
+### 010-02 페이징, Page<Question>과 최신순 정렬
+- [링크](https://github.com/tmdghks-dev/sbb/commit/010-02)
+- 작업: QuestionService.findPage(page): PageRequest.of(page, 10, createDate 내림차순)으로 JpaRepository.findAll(Pageable) 호출, 목록 액션에 @RequestParam(defaultValue = "0") int page, 모델에 paging(Page<Question>) 전달, 리포지터리 테스트 t11: 크기 1 페이지에서 전체 2건·2페이지·최신 질문이 먼저 나오는지 확인
+- 이유: 질문이 많아지면 한 화면에 다 보여줄 수 없으므로 10개씩 나눠 보여주기 위해 (책 3-02), 최근 질문이 위로 오도록 작성일 내림차순, Page에는 내용뿐 아니라 전체 개수·페이지 수가 들어 있어 페이지 이동 링크를 만들 수 있음
+- 결과: ./gradlew test 통과 (12개), 브라우저에서 /questions → [300]부터 10개, /questions?page=1 → [290]부터 10개 확인
+
+### 010-03 페이징, 페이지 이동·게시물 번호·답변 개수
+- [링크](https://github.com/tmdghks-dev/sbb/commit/010-03)
+- 작업: 목록 아래 Bootstrap pagination: 이전/다음(처음·마지막 페이지에서 비활성), 현재 페이지 기준 앞뒤 5페이지까지 번호 표시, 현재 페이지 active, 게시물 번호 = 전체 개수 - (현재 페이지 × 페이지 크기) - 나열 인덱스, 제목 옆에 답변 개수(#lists.size(question.answers))를 빨간 숫자로 표시, 답변이 없으면 숨김
+- 이유: 페이지를 이동할 수 있게 하고, 페이지 번호가 너무 많이 나열되지 않게 범위를 제한 (책 3-02), loop.count는 페이지마다 1부터 다시 시작하므로, 전체 기준 역순 번호를 계산 (책 3-03), 답변이 달린 질문을 목록에서 바로 알 수 있게 (책 3-04), 페이지 번호는 책과 같이 0부터 표시 (1부터 표시는 선택 목록), 주의: 답변 개수를 행마다 조회하므로 N+1 쿼리 발생 (개선은 선택 목록)
+- 결과: ./gradlew test 통과 (12개), 브라우저에서 마지막 페이지(30): 번호 2,1, 2번 질문 옆 답변 수 2, 페이지 25~30 표시·다음 비활성, 10페이지: 5~15 표시, 10 active 확인
+
+### 011-01 시큐리티, Spring Security 도입 (일단 전체 허용)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/011-01)
+- 작업: spring-boot-starter-security(+ security-test) 의존성 추가, global/security/SecurityConfig: SecurityFilterChain에서 /favicon.ico, /h2-console/**, /** 모두 permitAll, H2 콘솔용: frameOptions sameOrigin(콘솔이 frame을 씀), /h2-console/** CSRF 검사 제외
+- 이유: 회원가입·로그인을 만들기 위한 준비 (책 3-05, 14168 46강), 시큐리티를 넣으면 기본값으로 모든 요청이 로그인 필요 + POST/PUT/DELETE에 CSRF 토큰 검사 → 기존 화면이 막히지 않게 일단 전체 허용, th:action으로 만든 폼은 CSRF 토큰(_csrf)이 자동으로 들어가서 그대로 동작
+- 결과: ./gradlew test 통과 (12개), 브라우저에서 로그인 없이 목록·상세 접근, 답변 폼에 _csrf hidden 자동 포함, 폼으로 답변 등록 성공, 토큰 없이 POST → 403, H2 콘솔 접속 확인
+
+### 011-02 시큐리티, 정적 파일 위치 통일과 CSRF meta
+- [링크](https://github.com/tmdghks-dev/sbb/commit/011-02)
+- 작업: style.css를 static/resource/로 이동하고 레이아웃 경로 변경, SecurityConfig에 /resource/** permitAll, layout.html에 <meta name="_csrf" th:content="${_csrf.token}">
+- 이유: 정적 파일을 한 폴더에 모아 두면 시큐리티 허용 규칙을 /resource/** 하나로 단순하게 유지할 수 있음 (14168 46강), JS로 만든 폼(015의 a[method] 삭제 링크 등)이 CSRF 토큰을 읽어 갈 수 있게 페이지마다 meta로 넣어 둠 (14168 46강)
+- 결과: ./gradlew test 통과 (12개), 브라우저에서 /resource/style.css 200(예전 /style.css는 404), Pretendard 그대로 적용, meta _csrf에 토큰 값 확인
+
+### 012-01 회원가입, Member 엔티티와 MemberRepository
+- [링크](https://github.com/tmdghks-dev/sbb/commit/012-01)
+- 작업: domain/member/member/entity/Member: BaseEntity 상속, username·email은 unique, password, setter 없이 생성자 Member(username, password, email), MemberRepository: findByUsername, findByEmail (Optional)
+- 이유: 회원 정보를 저장하기 위해 (책 3-06 SiteUser), 이름은 SiteUser 대신 Member (설계 12), 아이디·이메일 중복을 DB 제약(unique)으로도 막기 위해, 책의 findByusername은 명명 오타 → findByUsername
+- 결과: ./gradlew test 통과 (12개), SQL 로그에 create table member와 username·email unique 제약 생성 확인
+
+### 012-02 회원가입, MemberService.join과 BCrypt 비밀번호 암호화
+- [링크](https://github.com/tmdghks-dev/sbb/commit/012-02)
+- 작업: SecurityConfig에 PasswordEncoder 빈(BCryptPasswordEncoder), MemberService: join(username, password, email)에서 비밀번호를 encode해서 저장, findByUsername, findByEmail, count, MemberServiceTest: 가입 시 비밀번호가 평문이 아닌 $2a$ 해시로 저장되고 matches로 확인되는지, 조회 메서드 동작
+- 이유: 비밀번호를 평문으로 저장하면 DB가 유출될 때 그대로 노출되므로 단방향 해시(BCrypt)로 저장 (책 3-06), PasswordEncoder를 빈으로 등록해 서비스와 (013의) 로그인 처리가 같은 방식으로 비교하게, 테스트는 14163과 같은 형식(test 프로필 + @Transactional 롤백)
+- 결과: ./gradlew test 통과 (14개)
+
+### 012-03 회원가입, 가입 폼(GET·POST /members/join)과 검증
+- [링크](https://github.com/tmdghks-dev/sbb/commit/012-03)
+- 작업: MemberController: 중첩 record JoinForm(username 3~25자, password1, password2, email 형식) + @Valid/BindingResult, 비밀번호 확인이 다르면 password2에 오류, 아이디·이메일이 이미 있으면 각 필드에 오류 (rejectValue, 메시지는 순번-필드명-메시지 형식), templates/member/member/join.html (form_errors fragment 재사용), navbar에 회원가입 링크
+- 이유: 책 3-06의 회원가입을 14168 폼 방식(같은 URL GET·POST, record 폼, 오류 정렬·focus)으로 구현, URL은 /members/join (설계 11), 책은 저장 중 DataIntegrityViolationException을 catch → 이 프로젝트는 컨트롤러에 트랜잭션이 있어 그 예외가 나면 트랜잭션이 롤백 전용이 되므로, 저장 전에 미리 조회해서 중복을 막음 (unique 제약은 마지막 안전장치)
+- 결과: ./gradlew test 통과 (14개), 브라우저에서 비밀번호 확인 불일치 → 오류 표시 + 비밀번호 확인 칸 focus, 정상 가입 → 홈(질문 목록)으로 이동, 같은 아이디로 가입 → "이미 사용중인 사용자ID입니다.", 같은 이메일 → "이미 사용중인 이메일입니다." 확인
+
+### 013-01 로그인, MemberRole·MemberSecurityService·formLogin
+- [링크](https://github.com/tmdghks-dev/sbb/commit/013-01)
+- 작업: MemberRole enum(ADMIN=ROLE_ADMIN, USER=ROLE_USER), MemberSecurityService implements UserDetailsService: username으로 회원 조회, admin이면 ROLE_ADMIN 아니면 ROLE_USER 권한, SecurityConfig에 formLogin(loginPage /members/login, 성공 시 /), GET /members/login 로그인 폼 화면, 실패 시(?error) 안내 문구, navbar에 로그인 링크, BaseInitData에 개발·테스트용 회원 admin, user1, user2 (비밀번호 1234, 아이디별로 없을 때만 생성)
+- 이유: 로그인은 시큐리티가 처리: POST /members/login을 받으면 UserDetailsService로 회원을 찾고 PasswordEncoder로 비밀번호를 비교 (책 3-07), 로그인 폼 URL은 /members/login (설계 11), 화면 확인과 다음 기능(글쓴이·권한) 테스트를 위해 회원 시드 데이터 준비 (14168 BaseInitData 방식), 처음엔 "회원이 0명일 때만 생성"으로 했다가 012에서 가입 테스트한 회원 때문에 시드가 안 만들어지는 문제를 확인하고 아이디별 확인으로 변경
+- 결과: ./gradlew test 통과 (14개), 브라우저에서 틀린 비밀번호 → /members/login?error와 안내 문구, user1/1234 로그인 → 홈(질문 목록)으로 이동 확인
+
+### 013-02 로그아웃 준비, global.js (a[method] → 폼 전송)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/013-02)
+- 작업: static/resource/global.js 추가 (14168 그대로): method 속성이 있는 a 태그를 클릭하면 POST 폼을 만들어 _csrf(meta에서 읽음)와 _method를 담아 전송, onclick(confirm 등)이 false면 중단, select[value] 기본값 지정, layout.html에서 모든 페이지에 defer로 로드
+- 이유: a 태그(링크)는 GET만 보낼 수 있어서, 로그아웃·삭제처럼 상태를 바꾸는 요청을 링크 모양 그대로 POST/DELETE로 보내기 위해 (14168 42~44강), 책은 삭제를 GET 링크 + JS location.href로 처리해서 CSRF 보호를 받지 못함, 011-02에서 넣은 meta _csrf를 여기서 사용
+- 결과: ./gradlew test 통과 (14개), 브라우저에서 /resource/global.js 200, 모든 페이지에 script 포함 확인 (실제 동작은 013-03 로그아웃에서 확인)
+
+### 013-03 로그아웃, POST 로그아웃과 navbar 로그인 상태 표시
+- [링크](https://github.com/tmdghks-dev/sbb/commit/013-03)
+- 작업: thymeleaf-extras-springsecurity6 의존성 추가 (버전은 Boot BOM 관리), SecurityConfig에 logout(logoutUrl /members/logout, 성공 시 /, 세션 무효화), navbar: 비로그인(sec:authorize="isAnonymous()")이면 로그인·회원가입, 로그인 상태면 "아이디님"과 로그아웃 링크 <a method="POST" href="/members/logout">
+- 이유: Spring Security 7은 CSRF가 켜져 있으면 로그아웃을 POST로만 받음 → 책의 GET 로그아웃(AntPathRequestMatcher)은 그대로 쓸 수 없음 (설계 17), 링크 모양은 그대로 두고 013-02의 global.js가 CSRF 토큰을 담은 POST 폼으로 바꿔 전송 (14168 a[method]), 로그인 여부에 따라 메뉴를 다르게 보여주기 위해 sec:authorize 사용 (책 3-07)
+- 결과: ./gradlew test 통과 (14개), 브라우저에서 비로그인 navbar: 로그인/회원가입, user1 로그인 후: user1님/로그아웃, GET /members/logout은 404이고 로그인 유지, 로그아웃 링크 클릭(POST) → 로그아웃되어 다시 로그인/회원가입 표시 확인
+
+### 014-01 글쓴이, 로그인한 사람만 질문·답변 작성 (@EnableMethodSecurity + @PreAuthorize)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/014-01)
+- 작업: SecurityConfig에 @EnableMethodSecurity, 질문 등록 폼·처리, 답변 등록 액션에 @PreAuthorize("isAuthenticated()")
+- 이유: 글쓴이를 저장하려면 작성할 때 로그인 사용자가 있어야 함 (책 3-08), @EnableMethodSecurity가 없으면 @PreAuthorize가 오류 없이 조용히 무시되므로 반드시 함께 추가 (책 v3.08, 계획 검증에서 발견), 책은 글쓴이 필드를 먼저 넣지만, 그러면 비로그인 작성 시 오류가 나는 중간 상태가 생겨서 로그인 확인을 먼저 적용
+- 결과: ./gradlew test 통과 (14개), 브라우저에서 비로그인으로 /questions/write → 로그인 페이지로 이동, 비로그인 답변 등록 → 로그인 페이지로 이동, user1 로그인 후 질문 등록 폼 정상 표시 확인
+
+### 014-02 글쓴이, 질문·답변에 author 저장과 표시
+- [링크](https://github.com/tmdghks-dev/sbb/commit/014-02)
+- 작업: Question·Answer에 @ManyToOne(fetch = LAZY) Member author, 생성자와 addAnswer(author, content)에 author 추가, 질문·답변 작성 액션에서 Principal(로그인 아이디)로 회원을 조회해 author로 저장, BaseInitData: 샘플 질문은 user1, 답변은 user2가 쓴 것으로, 목록에 글쓴이 열, 상세 질문·답변 카드에 글쓴이 표시 (author?.username로 글쓴이가 없는 예전 데이터도 오류 없이), 테스트 t9 수정(addAnswer에 user2), t12 추가: 질문 user1·답변 user2 확인
+- 이유: 누가 쓴 글인지 저장하고 보여주기 위해 (책 3-08), 글쓴이도 연관 엔티티이므로 LAZY (14163), 현재 로그인 사용자는 책과 같이 Principal로 받음
+- 결과: ./gradlew test 통과 (15개), 브라우저에서 user2로 질문과 답변 작성 → 상세 카드와 목록 글쓴이에 user2 표시, 샘플 데이터는 user1로 표시 확인
+
+### 015-01 수정·삭제 준비, _method로 PUT·DELETE 사용 (HiddenHttpMethodFilter)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-01)
+- 작업: application.yaml에 spring.mvc.hiddenmethod.filter.enabled: true, BackApplicationTests에 HiddenHttpMethodFilter 빈이 등록되었는지 확인하는 테스트 추가
+- 이유: HTML 폼은 GET·POST만 보낼 수 있음 → POST에 _method=PUT/DELETE를 담아 보내면 스프링이 PUT/DELETE 요청으로 바꿔 처리 (14168 41강), 수정은 @PutMapping, 삭제는 @DeleteMapping으로 행위를 HTTP 메서드로 구분하기 위해 (14163 37강 URL 표), Boot는 이 필터가 기본으로 꺼져 있어서 설정으로 켬
+- 결과: ./gradlew test 통과 (16개, 필터 등록 테스트 포함)
+
+### 015-02 질문 수정, GET·PUT /questions/{id}/modify (dirty checking)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-02)
+- 작업: Question.isAuthor(member): 작성자 id와 비교, QuestionController: 중첩 record ModifyForm, GET /questions/{id}/modify(기존 값으로 폼 채움), PUT /questions/{id}/modify(@Valid + BindingResult), 작성자가 아니면 ResponseStatusException 400 "수정권한이 없습니다.", QuestionService.modify: question.modify()만 호출 (save 없음), modify.html: hidden _method=PUT, form_errors 재사용, 상세 화면에 작성자에게만 수정 버튼 표시, 테스트 t13: isAuthor가 LAZY 프록시 author와도 id로 판단
+- 이유: 책은 GET·POST /question/modify/{id} + setter + save → 수정은 PUT, 변경은 엔티티의 modify 메서드, 저장은 dirty checking (14168 PostController.modify), 작성자 비교를 equals로 하면 LAZY 프록시는 클래스가 달라 false가 될 수 있어서 id로 비교 (계획 검증에서 발견), 권한 오류는 책과 같이 400 (403 통일은 선택 목록)
+- 결과: ./gradlew test 통과 (17개), 브라우저에서 user2는 1번 질문(작성자 user1)에 수정 버튼이 안 보이고, 수정 URL 직접 접근 시 오류 페이지, user1은 수정 버튼 → 기존 값이 채워진 폼 → 제목 수정 → 상세로 이동, 로그에 save 없이 update question 실행 확인
+
+### 015-03 질문 삭제, DELETE /questions/{id}/delete
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-03)
+- 작업: QuestionController: @DeleteMapping("/questions/{id}/delete"), 작성자 확인 후 삭제하고 홈으로 리다이렉트, QuestionService.delete: questionRepository.delete (cascade REMOVE로 답변도 삭제), 상세 화면 작성자 영역에 삭제 링크 <a method="DELETE" onclick="return confirm(...)">
+- 이유: 책은 GET /question/delete/{id} + JS location.href → 상태를 바꾸는 요청이 GET이라 CSRF 보호를 받지 못하고, 링크만 눌려도 삭제될 수 있음, DELETE 메서드 + CSRF 토큰으로 보내도록 global.js(a[method])와 _method 사용 (14168 41~44강), URL은 14168 댓글 삭제와 같은 패턴 …/{id}/delete (설계 11)
+- 결과: ./gradlew test 통과 (17개), 브라우저에서 답변이 달린 질문의 삭제 클릭 → 확인창 취소 시 그대로, 확인 시 목록으로 이동하고 그 질문 주소는 404, GET /questions/{id}/delete는 405로 거절 확인
+
+### 015-04 답변 수정, GET·PUT /questions/{qid}/answers/{id}/modify
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-04)
+- 작업: Question.findAnswerById(id): answers에서 찾기 (AnswerRepository 없음), Answer.isAuthor(member), Answer.modify(content), AnswerController: 중첩 record ModifyForm, GET·PUT /questions/{questionId}/answers/{id}/modify, 작성자가 아니면 400, templates/question/answer/modify.html: hidden _method=PUT, JS 빈 값 검사, 상세 화면 답변 카드에 작성자에게만 수정 버튼
+- 이유: 답변은 질문을 통해서만 다루기로 해서 question.findAnswerById로 찾음 (14168 findCommentById), URL은 질문의 하위 리소스 …/answers/{id}/modify, 수정은 PUT (14168 PostCommentController), 검증은 답변 작성과 같은 방식(JS 검사 + 서버 @Valid) (14168 댓글 수정), 저장은 dirty checking
+- 결과: ./gradlew test 통과 (17개), 브라우저에서 user2가 2번 질문의 자기 답변에서 수정 → 기존 내용이 채워진 폼 → 수정 후 상세에 반영 확인
+
+### 015-05 답변 삭제, DELETE /questions/{qid}/answers/{id}/delete (orphanRemoval)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-05)
+- 작업: Question.deleteAnswer(answer): answers 리스트에서 remove, QuestionService.deleteAnswer, AnswerController @DeleteMapping("/questions/{questionId}/answers/{id}/delete"), 작성자가 아니면 400, 상세 화면 답변 카드에 작성자에게만 삭제 링크(a[method=DELETE] + confirm), 테스트 t14: deleteAnswer 후 flush하면 DB의 답변 수가 줄어드는지 확인
+- 이유: AnswerRepository 없이 리스트에서 빼기만 하면 003-05의 orphanRemoval이 DELETE를 실행 (14168 deleteComment), BaseEntity의 id 기반 equals 덕분에 remove가 정확히 동작 (14168 38강), 삭제는 GET이 아닌 DELETE + CSRF (015-03과 같은 이유)
+- 결과: ./gradlew test 통과 (18개), 브라우저에서 user1은 user2 답변의 삭제 링크가 안 보이고 수정 URL 직접 요청 시 400, user2가 자기 답변 삭제 → 확인창 → 답변 2개에서 1개로 줄어듦 확인
+
+### 015-06 수정·삭제, 수정일시 표시
+- [링크](https://github.com/tmdghks-dev/sbb/commit/015-06)
+- 작업: 상세 화면 질문·답변 카드에 수정일시(modified at) 배지 추가, modifyDate가 createDate보다 나중일 때만 표시
+- 이유: 수정된 글인지 알 수 있게 (책 3-09), 책은 수정할 때만 modifyDate를 넣지만, 이 프로젝트는 JPA Auditing이 작성 시점에도 modifyDate를 채우므로 둘을 비교해서 실제로 수정된 경우만 표시, 계획의 015-06(작성자 권한 체크)은 015-02~05의 각 수정·삭제 작업에 함께 넣어서, 이 번호는 책 3-09의 나머지 기능에 사용
+- 결과: ./gradlew test 통과 (18개), 브라우저에서 015-02에서 수정한 1번 질문에만 modified at 배지가 보이고, 수정하지 않은 글에는 표시되지 않음 확인
+
+### 016-01 추천, 질문·답변 추천 (POST /…/vote)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/016-01)
+- 작업: Question·Answer에 @ManyToMany Set<Member> voters = new HashSet<>()와 vote(member), QuestionService.vote, voteAnswer, POST /questions/{id}/vote, POST /questions/{questionId}/answers/{id}/vote (로그인 필요), 상세 화면 질문·답변에 추천 버튼과 추천 수 배지, 링크는 a[method=POST] + confirm, 테스트 t15: 같은 회원이 두 번 추천해도 1번으로 셈
+- 이유: 질문·답변을 추천하는 기능 (책 3-10), Set이라 같은 회원은 한 번만 들어감, BaseEntity의 id 기반 equals로 같은 회원을 판별, 책의 voter 필드는 초기화가 없어 null 위험 → 14168처럼 컬렉션을 바로 초기화, 책은 GET /question/vote/{id} → 데이터를 바꾸는 요청이라 POST + CSRF (014 이후의 a[method] 방식)
+- 결과: ./gradlew test 통과 (19개), SQL 로그에 question_voters, answer_voters 중간 테이블 생성, 브라우저에서 user2가 1번 질문 추천 → 확인창 → 0에서 1, 한 번 더 추천해도 1 유지, GET /questions/1/vote는 405 확인 (답변 추천은 같은 구조로 구현, 화면 확인은 질문 추천만 함)
+
+### 017-01 앵커, 답변 작성·수정·추천 후 그 답변 위치로 이동
+- [링크](https://github.com/tmdghks-dev/sbb/commit/017-01)
+- 작업: 상세 화면 답변 카드마다 <a th:id="answer_{id}">, 답변 작성·수정·추천 후 redirect:/questions/{qid}#answer_{id}, QuestionService.writeAnswer에서 addAnswer 후 flush로 INSERT를 먼저 실행해 답변 id를 얻음
+- 이유: 답변이 많을 때 작성·수정·추천 후 페이지 맨 위로 돌아가지 않고 해당 답변을 바로 보게 (책 3-11), 이 프로젝트는 save 없이 cascade로 저장하므로 커밋 전까지 INSERT가 안 되어 id가 0 → IDENTITY 전략은 INSERT를 해야 id가 생기므로 flush를 명시적으로 호출 (14163: INSERT 시점은 flush), 책은 AnswerService.create가 save 후 Answer를 반환하도록 바꿈
+- 결과: ./gradlew test 통과 (19개), 브라우저에서 답변 등록 → /questions/2#answer_5로 이동하고 해당 앵커 존재, 창 높이 500px에서 같은 주소를 열면 그 답변이 화면 맨 위(anchorTop 0)로 스크롤되는 것 확인
+
+### 018-01 마크다운, commonmark로 질문·답변 내용 렌더링
+- [링크](https://github.com/tmdghks-dev/sbb/commit/018-01)
+- 작업: commonmark 0.24.0 의존성 (Boot BOM 밖이라 버전 명시), global/util/CommonUtil(@Component).markdown(): 마크다운 → HTML, 상세 화면 질문·답변 내용을 th:utext="${commonUtil.markdown(...)}"로 출력, QuestionController 상세 액션에서 commonUtil을 모델에 넣어 줌, CommonUtilTest: 제목·굵게·코드·목록 변환 확인
+- 이유: 질문·답변에 마크다운(제목, 굵게, 목록, 코드 블록)을 쓸 수 있게 (책 3-12), 책은 템플릿에서 ${@commonUtil.markdown(...)}로 빈을 직접 호출 → Boot 4의 Thymeleaf 3.1.5에서는 이 위치의 빈 호출이 보안 제한으로 막혀 템플릿 오류가 남(직접 확인) → 모델로 넘겨서 호출, 주의: 마크다운 안의 raw HTML도 그대로 출력되어 XSS 위험이 있음 (이스케이프는 선택 목록, 책도 같은 상태)
+- 결과: ./gradlew test 통과 (20개), 브라우저에서 마크다운으로 질문 작성 → h2 제목, 굵은 글씨, 목록 2개, 코드 블록(pre > code)으로 렌더링 확인
+
+### 019-01 검색, Specification으로 제목·내용·작성자·답변 검색
+- [링크](https://github.com/tmdghks-dev/sbb/commit/019-01)
+- 작업: QuestionRepository에 JpaSpecificationExecutor 추가, QuestionService.findPage(page, kw): Specification(질문 작성자·답변·답변 작성자 LEFT JOIN, distinct)으로 제목·내용·질문 작성자·답변 내용·답변 작성자 중 하나라도 kw를 포함하면 검색, 목록 액션에 @RequestParam(defaultValue = "") String kw, 모델에 kw, 목록 화면: 검색창과 찾기 버튼, 숨은 searchForm(kw, page)으로 페이지 이동 시에도 검색어 유지, QuestionServiceTest 5개: 전체, 제목, 답변 내용(질문 중복 없음), 질문 작성자, 답변 작성자 검색
+- 이유: 질문을 검색하는 기능 (책 3-13), 답변이 여러 개 걸리는 질문이 여러 번 나오지 않게 distinct, 페이지 링크와 검색을 한 폼으로 보내서 검색 결과 안에서 페이지를 이동할 수 있게 (책의 searchForm 방식 그대로), 책은 Specification과 @Query를 차례로 구현 → 019-02에서 @Query로 교체
+- 결과: ./gradlew test 통과 (25개), 브라우저에서 "[1" 검색 → [199]부터 10개와 0~5 페이지, 1페이지로 이동해도 검색어 유지([189]부터), "자동"(답변 내용) 검색 → 2번 질문 1건 확인
+
+### 019-02 검색, @Query JPQL로 교체
+- [링크](https://github.com/tmdghks-dev/sbb/commit/019-02)
+- 작업: QuestionRepository.findAllByKeyword(kw, pageable): select distinct q … left outer join q.author / q.answers / a.author … like %:kw% (JPQL, 텍스트 블록), QuestionService.findPage가 findAllByKeyword 사용, Specification 코드와 JpaSpecificationExecutor 제거
+- 이유: 책 3-13처럼 같은 검색을 JPQL로도 작성해 두 방식을 비교 (Criteria API는 자바 코드로 조립, JPQL은 SQL과 비슷한 문자열), JPQL은 연관관계 필드(q.author, q.answers)로 바로 조인할 수 있어 on 조건 없이 짧게 표현 가능, 책은 교체 후에도 Specification 메서드를 쓰지 않는 코드로 남겨 둠 → 사용하지 않는 코드는 지움 (019-01 커밋에 기록이 남아 있음)
+- 결과: ./gradlew test 통과 (25개, 검색 테스트 5개 그대로 통과), 브라우저에서 019-01과 같은 결과: "[1" 검색 10개·페이지 이동 시 검색어 유지, "자동" 검색 1건 확인
+
+### 019-03 1단계 마무리, README 정리 (실행 방법·기능·개선점)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/019-03)
+- 작업: README 상단에 기술 스택, 실행 방법(개발 회원·H2 콘솔), 구현 기능과 URL 표, 책과 비교한 개선점 14개, Boot 4에서 책 코드가 그대로 안 되던 곳 5개, 아직 하지 않은 선택 항목 정리
+- 이유: 1단계(책 2·3장 기능)를 마치고 결과물을 한눈에 볼 수 있게 하기 위해, 다음 순서인 하이퍼프레임 영상("점프 투 스프링부트를 구현했는데 이런 개선점이 있었다")의 대본 자료로 쓰기 위해 (강사 지시: 1단계 후 영상 제작)
+- 결과: ./gradlew test 통과 (25개), README 내용은 각 작업 커밋의 결과와 대조해서 작성
+
+### 019-04 1단계 마무리, 기능별 태그(001~019)와 바로가기 표
+- [링크](https://github.com/tmdghks-dev/sbb/commit/019-04)
+- 작업: 기능 번호마다 그 기능의 마지막 커밋에 태그 001 ~ 019 추가, README에 기능별 바로가기 표: 그 시점 코드(tree/번호), 그 기능에서 바뀐 내용(compare/이전번호...번호)
+- 이유: 커밋별 태그(001-01 …)만 있으면 54개라서 GitHub에서 원하는 기능을 찾기 어려움, 강사 레포처럼 번호로 바로 들어갈 수 있게 (github.com/tmdghks-dev/sbb/tree/015 처럼)
+- 결과: ./gradlew test 통과 (25개), 태그 19개 생성 확인
+
+### 020-01 1단계 보강, [실험] mappedBy 없는 OneToMany는 중간 테이블을 만든다
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-01)
+- 작업: Question.answers의 @OneToMany에서 mappedBy를 일부러 제거 (실험용, 다음 커밋에서 복구), 테스트 실행 로그에서 생성되는 테이블과 INSERT 확인
+- 이유: mappedBy가 왜 필요한지 결과로 직접 확인하기 위해 (14163 007~013, 강사 레포 004-03), mappedBy가 없으면 JPA는 Question→Answer(@OneToMany)와 Answer→Question(@ManyToOne)을 서로 다른 관계로 봄, 003-04에서는 이유를 글로만 적었고, 계획 대비 빠진 실험을 보강
+- 결과: ./gradlew test 통과 (25개), DDL 로그에 create table question_answers (question_id, answers_id) 중간 테이블 생성, 답변을 추가할 때 answer.question_id와 별도로 question_answers에도 INSERT가 한 번 더 실행됨 → 같은 관계를 두 군데에 저장
+
+### 020-02 1단계 보강, mappedBy 복구로 관계를 answer.question_id 하나로
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-02)
+- 작업: @OneToMany(mappedBy = "question", …)로 되돌림
+- 이유: mappedBy = "question"은 "이 관계의 주인은 Answer.question 필드(외래키 question_id)"라는 뜻 → 중간 테이블 없이 외래키 하나로 관리 (14163, 강사 레포 004-04), 020-01 실험과 비교해 왜 mappedBy를 붙이는지 커밋 기록으로 남기기 위해
+- 결과: ./gradlew test 통과 (25개), 테스트 로그에 question_answers가 한 번도 나오지 않음 확인
+
+### 020-03 1단계 보강, [실험] 트랜잭션 밖 LAZY 로딩은 실패한다
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-03)
+- 작업: QuestionLazyLoadingTest 추가: 클래스에 @Transactional 없이 findById로 질문을 가져온 뒤 answers를 읽으면 LazyInitializationException이 나는 것을 단언
+- 이유: LAZY 컬렉션은 실제로 사용할 때 SELECT 되므로 그 순간 DB 커넥션(영속성 컨텍스트)이 살아 있어야 함을 실패로 확인 (14163 22~25강, 강사 레포 005-04), QuestionRepositoryTest t10이 통과하는 이유가 클래스의 @Transactional 때문임을 비교로 보여주기 위해, 화면에서 LAZY가 동작하는 것은 OSIV 덕분 (설계 7)
+- 결과: ./gradlew test 통과 (26개, 이 테스트는 예외가 나야 통과)
+
+### 020-04 1단계 보강, default_batch_fetch_size로 목록의 N+1 완화
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-04)
+- 작업: application.yaml에 spring.jpa.properties.hibernate.default_batch_fetch_size: 100
+- 이유: 질문 목록은 행마다 답변 개수(question.answers)를 읽어서, 질문 10개면 답변 SELECT가 10번 더 나가는 N+1 문제가 있었음 (010-03에서 주의로만 기록), 배치 크기를 정하면 LAZY 컬렉션을 처음 읽을 때 같은 페이지의 질문들 답변을 IN (…) 한 번으로 함께 가져옴 (강사 레포 020-02), 엔티티를 템플릿에 직접 넘기는 설계(7)를 유지하면서 쿼리 수를 줄이는 가장 작은 변경
+- 결과: ./gradlew test 통과 (26개), 개발 실행(질문 302개)에서 GET /questions 한 번에 실행된 SELECT: 변경 전 12개(답변 조회 question_id=? 10번 포함) → 변경 후 3개(답변 조회 question_id in (…) 1번)
+
+### 020-05 1단계 보강, [실험] 마크다운 raw HTML이 그대로 실행된다 (XSS)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-05)
+- 작업: CommonUtilTest t2: 마크다운에 <script>와 javascript: 링크를 넣으면 변환 결과에 그대로 남는 것을 단언 (취약점을 테스트로 기록)
+- 이유: 018-01에서 상세 화면은 th:utext로 변환된 HTML을 그대로 출력하므로, 누군가 질문에 <script>를 쓰면 그 글을 여는 모든 사람의 브라우저에서 실행됨 (저장형 XSS), 고치기 전에 문제가 실제로 있는지 먼저 테스트로 확인 (강사 레포 028-01의 [실험]), 책도 같은 상태
+- 결과: ./gradlew test 통과 (27개, 다음 커밋에서 이 테스트를 "막힌다"로 바꿈)
+
+### 020-06 1단계 보강, 마크다운 raw HTML 이스케이프와 위험한 링크 무력화 (XSS 방지)
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-06)
+- 작업: CommonUtil의 HtmlRenderer에 escapeHtml(true), sanitizeUrls(true), Parser·HtmlRenderer를 호출마다 만들지 않고 필드로 한 번만 생성, CommonUtilTest t2를 "막힌다"로 변경: <script>는 &lt;script&gt; 글자로, javascript: 링크는 제거
+- 이유: 020-05에서 확인한 저장형 XSS를 막기 위해 (강사 레포 028-02), 마크다운 문법(굵게, 목록, 코드)은 그대로 쓰고, 사용자가 직접 쓴 HTML만 글자로 바꾸는 가장 작은 변경, 책은 이 부분을 막지 않음
+- 결과: ./gradlew test 통과 (27개), 브라우저에서 <script>document.title='XSS'</script>를 넣은 질문 작성 → 굵게는 적용, script 태그 0개(화면에 글자로 보임), 페이지 제목은 바뀌지 않음, javascript: 링크의 href는 빈 값
+
+### 020-07 1단계 보강, README 개선점·바로가기 갱신
+- [링크](https://github.com/tmdghks-dev/sbb/commit/020-07)
+- 작업: README 개선점 표에 15(N+1)·16(XSS) 추가, 2번에 [실험] 커밋과 테스트 27개 반영, 아직 하지 않은 것에서 XSS·N+1 제거, 기능별 바로가기에 020 추가, 참고 자료에 강사 레포(jhs512/jsb-plus) 링크
+- 이유: 020-01~06 보강 내용을 README 요약에도 반영해 한눈에 보이게, "강사 레포 000-00" 표기가 어느 레포를 말하는지 명확히 하기 위해
+- 결과: ./gradlew test 통과 (27개)
