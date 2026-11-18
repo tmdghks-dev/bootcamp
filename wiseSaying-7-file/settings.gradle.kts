@@ -1,0 +1,1 @@
+rootProject.name = "wiseSaying-7-file"
