@@ -1,5 +1,7 @@
 package com.back.domain.post.post.controller;
 
+import com.back.domain.member.member.entity.Member;
+import com.back.domain.member.member.service.MemberService;
 import com.back.domain.post.post.dto.PostDto;
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
@@ -20,6 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "ApiV1PostController", description = "API 글 컨트롤러")
 public class ApiV1PostController {
+    private final MemberService memberService;
     private final PostService postService;
 
     @GetMapping
@@ -76,7 +79,9 @@ public class ApiV1PostController {
     public RsData<PostDto> write(
             @RequestBody @Valid PostWriteReqBody reqBody
     ) {
-        Post post = postService.write(reqBody.title, reqBody.content);
+        // 074강에서 actorId로 바꾼다. 지금은 작성자를 system으로 임시 지정
+        Member author = memberService.findByUsername("system").get();
+        Post post = postService.write(author, reqBody.title, reqBody.content);
 
         return new RsData<>(
                 "201-1",

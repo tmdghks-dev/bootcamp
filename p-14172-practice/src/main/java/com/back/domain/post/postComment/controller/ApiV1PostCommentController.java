@@ -1,5 +1,7 @@
 package com.back.domain.post.postComment.controller;
 
+import com.back.domain.member.member.entity.Member;
+import com.back.domain.member.member.service.MemberService;
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.dto.PostCommentDto;
@@ -21,6 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "ApiV1PostCommentController", description = "API 댓글 컨트롤러")
 public class ApiV1PostCommentController {
+    private final MemberService memberService;
     private final PostService postService;
 
     @GetMapping
@@ -112,7 +115,9 @@ public class ApiV1PostCommentController {
     ) {
         Post post = postService.findById(postId).get();
 
-        PostComment postComment = postService.writeComment(post, reqBody.content);
+        // 075강에서 actorId로 바꾼다. 지금은 작성자를 system으로 임시 지정
+        Member author = memberService.findByUsername("system").get();
+        PostComment postComment = postService.writeComment(author, post, reqBody.content);
 
         postService.flush();
 
