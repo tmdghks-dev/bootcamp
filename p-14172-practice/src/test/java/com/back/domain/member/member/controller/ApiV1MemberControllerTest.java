@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -149,5 +150,33 @@ public class ApiV1MemberControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.resultCode").value("401-1"))
                 .andExpect(jsonPath("$.msg").value("로그인 후 이용해주세요."));
+    }
+
+    @Test
+    @DisplayName("샘플 데이터 - 회원 6명")
+    void t5() throws Exception {
+        String[][] members = {
+                {"system", "시스템"},
+                {"admin", "관리자"},
+                {"user1", "유저1"},
+                {"user2", "유저2"},
+                {"user3", "유저3"},
+                {"user4", "유저4"}
+        };
+
+        for (String[] m : members) {
+            Member member = memberService.findByUsername(m[0]).get();
+
+            mvc
+                    .perform(
+                            get("/api/v1/members/me?actorId=%d".formatted(member.getId()))
+                    )
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.username").value(m[0]))
+                    .andExpect(jsonPath("$.name").value(m[1]));
+
+            assertThat(member.getPassword()).isEqualTo("12345678");
+        }
     }
 }
