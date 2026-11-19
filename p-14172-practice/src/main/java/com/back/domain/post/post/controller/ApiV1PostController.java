@@ -5,7 +5,6 @@ import com.back.domain.member.member.service.MemberService;
 import com.back.domain.post.post.dto.PostDto;
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
-import com.back.global.globalExceptionHandler.UnauthenticatedException;
 import com.back.global.rsData.RsData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -81,9 +80,7 @@ public class ApiV1PostController {
             @RequestParam(defaultValue = "0") int actorId,
             @RequestBody @Valid PostWriteReqBody reqBody
     ) {
-        Member author = memberService.findById(actorId).orElseThrow(
-                UnauthenticatedException::new
-        );
+        Member author = memberService.getActor(actorId);
         Post post = postService.write(author, reqBody.title, reqBody.content);
 
         return new RsData<>(

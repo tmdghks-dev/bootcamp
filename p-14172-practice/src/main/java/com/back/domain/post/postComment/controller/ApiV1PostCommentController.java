@@ -6,7 +6,6 @@ import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.dto.PostCommentDto;
 import com.back.domain.post.postComment.entity.PostComment;
-import com.back.global.globalExceptionHandler.UnauthenticatedException;
 import com.back.global.rsData.RsData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -115,9 +114,7 @@ public class ApiV1PostCommentController {
             @RequestParam(defaultValue = "0") int actorId,
             @Valid @RequestBody PostCommentWriteReqBody reqBody
     ) {
-        Member author = memberService.findById(actorId).orElseThrow(
-                UnauthenticatedException::new
-        );
+        Member author = memberService.getActor(actorId);
 
         Post post = postService.findById(postId).get();
         PostComment postComment = postService.writeComment(author, post, reqBody.content);
