@@ -12,8 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.*;
 
 @ControllerAdvice
 @RequiredArgsConstructor
@@ -57,6 +56,17 @@ public class GlobalExceptionHandler {
                         "요청 본문이 올바르지 않습니다."
                 ),
                 BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<RsData<Void>> handle(IllegalArgumentException ex) {
+        return new ResponseEntity<>(
+                new RsData<>(
+                        "409-1",
+                        ex.getMessage()
+                ),
+                CONFLICT
         );
     }
 }
