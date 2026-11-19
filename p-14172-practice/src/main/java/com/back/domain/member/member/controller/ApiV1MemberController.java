@@ -54,7 +54,7 @@ public class ApiV1MemberController {
     @Transactional
     @Operation(summary = "내 정보")
     public MemberDto me(
-            int actorId
+            @RequestParam(defaultValue = "0") int actorId
     ) {
         Member loginMember = memberService.findById(actorId).orElseThrow(
                 UnauthenticatedException::new
