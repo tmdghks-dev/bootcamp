@@ -21,3 +21,4 @@
 | ioc-v1 | IoC 컨테이너 클론 v1 (하드코딩 빈 생성) |
 | ioc-v2 | IoC 컨테이너 클론 v2 (컴포넌트 스캔) |
 | ioc-v3 | IoC 컨테이너 클론 v3 (@Configuration·@Bean, JDK 21) |
+| p-14172-practice | REST API 연습문제 70~79강: 회원가입·내 정보, 작성자(actorId), 401/403 권한 (slog.gg/p/14172, 068 코드에서 시작) |
