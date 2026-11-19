@@ -3,6 +3,7 @@ package com.back.domain.member.member.controller;
 import com.back.domain.member.member.dto.MemberDto;
 import com.back.domain.member.member.entity.Member;
 import com.back.domain.member.member.service.MemberService;
+import com.back.global.globalExceptionHandler.UnauthenticatedException;
 import com.back.global.rsData.RsData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,7 +56,9 @@ public class ApiV1MemberController {
     public MemberDto me(
             int actorId
     ) {
-        Member loginMember = memberService.findById(actorId).get();
+        Member loginMember = memberService.findById(actorId).orElseThrow(
+                UnauthenticatedException::new
+        );
 
         return new MemberDto(loginMember);
     }
