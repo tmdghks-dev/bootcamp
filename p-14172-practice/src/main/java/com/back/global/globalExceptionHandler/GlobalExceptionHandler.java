@@ -80,4 +80,15 @@ public class GlobalExceptionHandler {
                 UNAUTHORIZED
         );
     }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<RsData<Void>> handle(AccessDeniedException ex) {
+        return new ResponseEntity<>(
+                new RsData<>(
+                        "403-1",
+                        ex.getMessage()
+                ),
+                FORBIDDEN
+        );
+    }
 }
