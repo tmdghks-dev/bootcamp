@@ -1,5 +1,6 @@
 package com.back.domain.member.member.controller;
 
+import com.back.domain.member.member.dto.MemberDto;
 import com.back.domain.member.member.entity.Member;
 import com.back.domain.member.member.service.MemberService;
 import com.back.global.rsData.RsData;
@@ -51,11 +52,11 @@ public class ApiV1MemberController {
     @GetMapping("/me")
     @Transactional
     @Operation(summary = "내 정보")
-    public Member me(
+    public MemberDto me(
             int actorId
     ) {
         Member loginMember = memberService.findById(actorId).get();
 
-        return loginMember;
+        return new MemberDto(loginMember);
     }
 }
