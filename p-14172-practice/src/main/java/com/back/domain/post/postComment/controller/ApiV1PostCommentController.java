@@ -6,6 +6,7 @@ import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.dto.PostCommentDto;
 import com.back.domain.post.postComment.entity.PostComment;
+import com.back.global.globalExceptionHandler.UnauthenticatedException;
 import com.back.global.rsData.RsData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -111,12 +112,14 @@ public class ApiV1PostCommentController {
     @Operation(summary = "작성")
     public RsData<PostCommentDto> write(
             @PathVariable int postId,
+            @RequestParam(defaultValue = "0") int actorId,
             @Valid @RequestBody PostCommentWriteReqBody reqBody
     ) {
-        Post post = postService.findById(postId).get();
+        Member author = memberService.findById(actorId).orElseThrow(
+                UnauthenticatedException::new
+        );
 
-        // 075강에서 actorId로 바꾼다. 지금은 작성자를 system으로 임시 지정
-        Member author = memberService.findByUsername("system").get();
+        Post post = postService.findById(postId).get();
         PostComment postComment = postService.writeComment(author, post, reqBody.content);
 
         postService.flush();
