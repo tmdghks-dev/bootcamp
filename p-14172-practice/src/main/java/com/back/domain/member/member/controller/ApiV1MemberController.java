@@ -10,10 +10,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/members")
@@ -48,5 +45,17 @@ public class ApiV1MemberController {
                 "201-1",
                 "%s님 환영합니다. 회원가입이 완료되었습니다.".formatted(member.getName())
         );
+    }
+
+
+    @GetMapping("/me")
+    @Transactional
+    @Operation(summary = "내 정보")
+    public Member me(
+            int actorId
+    ) {
+        Member loginMember = memberService.findById(actorId).get();
+
+        return loginMember;
     }
 }
