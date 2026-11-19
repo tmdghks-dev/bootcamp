@@ -59,8 +59,8 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<RsData<Void>> handle(IllegalArgumentException ex) {
+    @ExceptionHandler(MemberDuplicateUsernameException.class)
+    public ResponseEntity<RsData<Void>> handle(MemberDuplicateUsernameException ex) {
         return new ResponseEntity<>(
                 new RsData<>(
                         "409-1",
