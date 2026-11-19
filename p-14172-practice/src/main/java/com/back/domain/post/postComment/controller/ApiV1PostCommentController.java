@@ -90,10 +90,15 @@ public class ApiV1PostCommentController {
     public RsData<Void> modify(
             @PathVariable int postId,
             @PathVariable int id,
+            @RequestParam(defaultValue = "0") int actorId,
             @RequestBody @Valid PostCommentModifyReqBody reqBody
     ) {
+        Member actor = memberService.getActor(actorId);
+
         Post post = postService.findById(postId).get();
         PostComment postComment = post.findCommentById(id).get();
+
+        postComment.checkActorCanModify(actor);
 
         postService.modifyComment(postComment, reqBody.content);
 
