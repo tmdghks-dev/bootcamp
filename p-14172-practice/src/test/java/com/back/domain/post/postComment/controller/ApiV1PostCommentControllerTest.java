@@ -96,10 +96,11 @@ public class ApiV1PostCommentControllerTest {
     void t3() throws Exception {
         int postId = 1;
         int id = 1;
+        Member actor = memberService.findByUsername("user1").get();
 
         ResultActions resultActions = mvc
                 .perform(
-                        delete("/api/v1/posts/%d/comments/%d".formatted(postId, id))
+                        delete("/api/v1/posts/%d/comments/%d?actorId=%d".formatted(postId, id, actor.getId()))
                 )
                 .andDo(print());
 
@@ -221,5 +222,46 @@ public class ApiV1PostCommentControllerTest {
                     .andExpect(jsonPath("$.authorId").value(author.getId()))
                     .andExpect(jsonPath("$.authorName").value(author.getName()));
         }
+    }
+
+    @Test
+    @DisplayName("댓글 삭제, without actorId")
+    void t22() throws Exception {
+        int postId = 1;
+        int id = 1;
+
+        ResultActions resultActions = mvc
+                .perform(
+                        delete("/api/v1/posts/%d/comments/%d".formatted(postId, id))
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.resultCode").value("401-1"))
+                .andExpect(jsonPath("$.msg").value("로그인 후 이용해주세요."));
+    }
+
+    @Test
+    @DisplayName("댓글 삭제, by not author")
+    void t23() throws Exception {
+        int postId = 1;
+        int id = 1;
+        Member actor = memberService.findByUsername("user2").get();
+
+        ResultActions resultActions = mvc
+                .perform(
+                        delete("/api/v1/posts/%d/comments/%d?actorId=%d".formatted(postId, id, actor.getId()))
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostCommentController.class))
+                .andExpect(handler().methodName("delete"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.resultCode").value("403-1"))
+                .andExpect(jsonPath("$.msg").value("권한이 없습니다."));
     }
 }
