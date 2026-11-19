@@ -41,6 +41,10 @@ public class Post extends BaseEntity {
         if (author.getId() != actor.getId()) throw new AccessDeniedException();
     }
 
+    public void checkActorCanModify(Member actor) {
+        if (author.getId() != actor.getId()) throw new AccessDeniedException();
+    }
+
     public void modify(String title, String content) {
         this.title = title;
         this.content = content;
