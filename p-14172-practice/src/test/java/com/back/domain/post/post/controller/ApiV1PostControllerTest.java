@@ -200,10 +200,11 @@ public class ApiV1PostControllerTest {
     @DisplayName("글 수정")
     void t2() throws Exception {
         int id = 1;
+        Member actor = memberService.findByUsername("user1").get();
 
         ResultActions resultActions = mvc
                 .perform(
-                        put("/api/v1/posts/" + id)
+                        put("/api/v1/posts/%d?actorId=%d".formatted(id, actor.getId()))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                         {
@@ -366,6 +367,59 @@ public class ApiV1PostControllerTest {
         resultActions
                 .andExpect(handler().handlerType(ApiV1PostController.class))
                 .andExpect(handler().methodName("delete"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.resultCode").value("403-1"))
+                .andExpect(jsonPath("$.msg").value("권한이 없습니다."));
+    }
+
+    @Test
+    @DisplayName("글 수정, without actorId")
+    void t25() throws Exception {
+        int id = 1;
+
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/" + id)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "제목 new",
+                                            "content": "내용 new"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("modify"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.resultCode").value("401-1"))
+                .andExpect(jsonPath("$.msg").value("로그인 후 이용해주세요."));
+    }
+
+    @Test
+    @DisplayName("글 수정, by not author")
+    void t26() throws Exception {
+        int id = 1;
+        Member actor = memberService.findByUsername("user2").get();
+
+        ResultActions resultActions = mvc
+                .perform(
+                        put("/api/v1/posts/%d?actorId=%d".formatted(id, actor.getId()))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                            "title": "제목 new",
+                                            "content": "내용 new"
+                                        }
+                                        """)
+                )
+                .andDo(print());
+
+        resultActions
+                .andExpect(handler().handlerType(ApiV1PostController.class))
+                .andExpect(handler().methodName("modify"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.resultCode").value("403-1"))
                 .andExpect(jsonPath("$.msg").value("권한이 없습니다."));
