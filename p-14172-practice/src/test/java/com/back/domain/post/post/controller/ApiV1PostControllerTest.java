@@ -2,6 +2,8 @@ package com.back.domain.post.post.controller;
 
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
+import com.back.domain.member.member.entity.Member;
+import com.back.domain.member.member.service.MemberService;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,8 @@ public class ApiV1PostControllerTest {
     private MockMvc mvc;
     @Autowired
     private PostService postService;
+    @Autowired
+    private MemberService memberService;
 
 
     @Test
@@ -258,6 +262,23 @@ public class ApiV1PostControllerTest {
                     .andExpect(jsonPath("$[%d].modifyDate".formatted(i)).value(Matchers.startsWith(post.getModifyDate().toString().substring(0, 20))))
                     .andExpect(jsonPath("$[%d].title".formatted(i)).value(post.getTitle()))
                     .andExpect(jsonPath("$[%d].content".formatted(i)).value(post.getContent()));
+        }
+    }
+
+    @Test
+    @DisplayName("샘플 글의 작성자 - 1번 글은 user1, 2번 글은 user2, 3번 글은 user3")
+    void t20() throws Exception {
+        for (int id = 1; id <= 3; id++) {
+            Member author = memberService.findByUsername("user" + id).get();
+
+            mvc
+                    .perform(
+                            get("/api/v1/posts/%d".formatted(id))
+                    )
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.authorId").value(author.getId()))
+                    .andExpect(jsonPath("$.authorName").value(author.getName()));
         }
     }
 }

@@ -3,6 +3,8 @@ package com.back.domain.post.postComment.controller;
 import com.back.domain.post.post.entity.Post;
 import com.back.domain.post.post.service.PostService;
 import com.back.domain.post.postComment.entity.PostComment;
+import com.back.domain.member.member.entity.Member;
+import com.back.domain.member.member.service.MemberService;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,8 @@ public class ApiV1PostCommentControllerTest {
     private MockMvc mvc;
     @Autowired
     private PostService postService;
+    @Autowired
+    private MemberService memberService;
 
     @Test
     @DisplayName("댓글 단건조회")
@@ -163,5 +167,31 @@ public class ApiV1PostCommentControllerTest {
                 .andExpect(jsonPath("$.data.createDate").value(Matchers.startsWith(postComment.getCreateDate().toString().substring(0, 20))))
                 .andExpect(jsonPath("$.data.modifyDate").value(Matchers.startsWith(postComment.getModifyDate().toString().substring(0, 20))))
                 .andExpect(jsonPath("$.data.content").value("내용"));
+    }
+
+    @Test
+    @DisplayName("샘플 댓글의 작성자 - 1번 user1, 2번 user2, 3번 user3, 4번 user1, 5번 user2")
+    void t20() throws Exception {
+        int[][] cases = {
+                // {글 번호, 댓글 번호, 작성자 user 번호}
+                {1, 1, 1},
+                {1, 2, 2},
+                {1, 3, 3},
+                {2, 4, 1},
+                {2, 5, 2}
+        };
+
+        for (int[] c : cases) {
+            Member author = memberService.findByUsername("user" + c[2]).get();
+
+            mvc
+                    .perform(
+                            get("/api/v1/posts/%d/comments/%d".formatted(c[0], c[1]))
+                    )
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.authorId").value(author.getId()))
+                    .andExpect(jsonPath("$.authorName").value(author.getName()));
+        }
     }
 }
