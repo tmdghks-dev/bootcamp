@@ -22,3 +22,4 @@
 | ioc-v2 | IoC 컨테이너 클론 v2 (컴포넌트 스캔) |
 | ioc-v3 | IoC 컨테이너 클론 v3 (@Configuration·@Bean, JDK 21) |
 | p-14172-practice | REST API 연습문제 70~79강: 회원가입·내 정보, 작성자(actorId), 401/403 권한 (slog.gg/p/14172, 068 코드에서 시작) |
+| p-14175-2 | Next.js 프론트엔드 (slog.gg/p/14175, 1강 프로젝트 생성부터, 백엔드 p-14172-2 068) |
